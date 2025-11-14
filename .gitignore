@@ -1,2 +1,12 @@
 tmux/.tmux/plugins/*
 !tmux/.tmux/plugins/tpm
+
+# Ansible inventory files (keep local only)
+inventory
+inventory.ini
+inventory.yml
+inventory.yaml
+hosts
+hosts.ini
+hosts.yml
+hosts.yaml

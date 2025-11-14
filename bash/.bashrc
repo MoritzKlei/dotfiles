@@ -112,7 +112,6 @@ if ! shopt -oq posix; then
 fi
 . "$HOME/.cargo/env"
 eval "$(starship init bash)"
-eval "$(gh copilot alias -- bash)"
 eval "$(zoxide init --cmd cd bash)"
 export PATH="$PATH:/usr/local/go/bin"
 export PATH="$PATH:~/go/bin"
@@ -138,6 +137,9 @@ wingitsub() {
 }
 cninja() {
   cmake -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $1
+}
+pwsh() {
+  pwsh.exe -wd "${1:-C:/Users/u4032606/}"
 }
 
 # Generated for envman. Do not edit.

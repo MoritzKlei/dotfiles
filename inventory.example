@@ -1,0 +1,21 @@
+# Example inventory file for deploying to remote servers
+# Copy this to 'inventory' and customize for your servers
+# The inventory file is gitignored to keep your server IPs private
+
+[webservers]
+web1 ansible_host=192.168.1.10 ansible_user=mkl
+web2 ansible_host=192.168.1.11 ansible_user=mkl
+
+[databases]
+db1 ansible_host=192.168.1.20 ansible_user=mkl
+
+[development]
+dev1 ansible_host=192.168.1.30 ansible_user=mkl
+
+# You can also use localhost for local execution
+[local]
+localhost ansible_connection=local
+
+# Variables for all servers
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
