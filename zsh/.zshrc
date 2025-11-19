@@ -70,6 +70,3 @@ pwsh() {
 
 # -------- opencode -------- 
 export PATH=/home/mkl/.opencode/bin:$PATH
-
-# -------- Getinge -------- 
-export NODE_EXTRA_CA_CERTS=/usr/share/ca-certificates/extra/ZscalerRootCert.crt
