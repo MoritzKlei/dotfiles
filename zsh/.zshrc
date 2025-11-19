@@ -39,8 +39,6 @@ source $HOME/.zsh/plugins/fzf-tab/fzf-tab.plugin.zsh
 . "$HOME/.cargo/env"
 eval "$(zoxide init --cmd cd zsh)"
 eval "$(starship init zsh)"
-eval "$(gh copilot alias -- zsh)"
-eval "$(zoxide init --cmd cd bash)"
 
 # -------- fzf integration --------
 [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ] && source /usr/share/doc/fzf/examples/key-bindings.zsh
@@ -66,3 +64,9 @@ wingitsub() {
 cninja() {
   cmake -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $1
 }
+pwsh() {
+    pwsh.exe -wd "${1:-C:/Users/u4032606/}"
+}
+
+# -------- opencode -------- 
+export PATH=/home/mkl/.opencode/bin:$PATH
