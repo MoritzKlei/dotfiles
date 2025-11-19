@@ -3,27 +3,40 @@
   vars:
     dotfiles_repo: "https://github.com/MoritzKlei/dotfiles.git"
     dotfiles_dir: "{{ ansible_user_dir }}/dotfiles"
+    cargo_packages:
+      - ripgrep
+      - fd-find
+      - eza
+      - starship
+      - zoxide
+    go_packages:
+      - github.com/jesseduffield/lazygit@latest
+      - github.com/jesseduffield/lazydocker@latest
+    stow_packages:
+      - bash
+      - zsh
+      - nvim
+      - tmux
+      - starship
+    config_files:
+      - path: .bashrc
+      - path: .zshrc
+      - path: .tmux.conf
+      - path: .config/nvim
+      - path: .config/starship.toml
 
   tasks:
-    - name: Ping hosts
-      ansible.builtin.ping:
-
-    - name: Update apt cache if older than 1 hour
+    - name: Update apt cache
       become: true
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
         cache_valid_time: 3600
-
-    - name: Ensure git is installed
-      become: true
-      ansible.builtin.apt:
-        name: git
-        state: present
 
     - name: Install apt packages
       become: true
       ansible.builtin.apt:
-        pkg:
+        name:
+          - git
           - curl
           - wget
           - build-essential
@@ -51,118 +64,89 @@
         path: /usr/local/go
       register: go_dir
 
-    - name: Get and install latest Go
+    - name: Install latest Go
       when: not go_dir.stat.exists
       become: true
       block:
         - name: Fetch latest Go version
           ansible.builtin.uri:
             url: https://go.dev/dl/?mode=json
-            return_content: yes
+            return_content: true
           register: go_versions
 
-        - name: Install latest Go
+        - name: Download and extract latest Go
           ansible.builtin.unarchive:
             src: "https://go.dev/dl/{{ (go_versions.content | from_json)[0].files | selectattr('os', 'equalto', 'linux') | selectattr('arch', 'equalto', 'amd64') | map(attribute='filename') | first }}"
             dest: /usr/local
-            remote_src: yes
+            remote_src: true
 
-    # Rustup installation
-    - name: Check if cargo binary exists
+    # Rust Installation
+    - name: Check if cargo exists
       ansible.builtin.stat:
         path: "{{ ansible_user_dir }}/.cargo/bin/cargo"
       register: cargo_exists
 
-    - name: Download rustup installer
+    - name: Install Rust
       when: not cargo_exists.stat.exists
-      ansible.builtin.get_url:
-        url: https://sh.rustup.rs
-        dest: /tmp/sh.rustup.rs
-        mode: "0755"
+      block:
+        - name: Download rustup installer
+          ansible.builtin.get_url:
+            url: https://sh.rustup.rs
+            dest: /tmp/sh.rustup.rs
+            mode: "0755"
 
-    - name: Install rustup
-      when: not cargo_exists.stat.exists
-      ansible.builtin.shell: /tmp/sh.rustup.rs -y
-      args:
-        creates: "{{ ansible_user_dir }}/.cargo/bin/cargo"
+        - name: Run rustup installer
+          ansible.builtin.shell: /tmp/sh.rustup.rs -y
+          args:
+            creates: "{{ ansible_user_dir }}/.cargo/bin/cargo"
 
-    - name: Set rustup default toolchain to stable
-      when: not cargo_exists.stat.exists
+        - name: Set rustup default toolchain to stable
+          ansible.builtin.shell: |
+            source $HOME/.cargo/env
+            rustup default stable
+          args:
+            executable: /bin/bash
+
+    # Cargo packages
+    - name: Check installed cargo packages
       ansible.builtin.shell: |
         source $HOME/.cargo/env
-        rustup default stable
+        cargo install --list
       args:
         executable: /bin/bash
-
-    # Cargo packages installation
-    - name: Check which cargo packages are installed
-      ansible.builtin.shell: |
-        source $HOME/.cargo/env
-        cargo install --list | grep -E '^(ripgrep|fd-find|eza|starship|zoxide) v' || true
-      args:
-        executable: /bin/bash
-      register: cargo_installed
+      register: cargo_list
       changed_when: false
+      failed_when: false
 
-    - name: Install ripgrep via cargo
+    - name: Install cargo packages
       ansible.builtin.shell: |
         source $HOME/.cargo/env
-        cargo install ripgrep
+        cargo install {{ item }}
       args:
         executable: /bin/bash
-      when: "'ripgrep' not in cargo_installed.stdout"
+      loop: "{{ cargo_packages }}"
+      when: "item not in cargo_list.stdout"
 
-    - name: Install fd-find via cargo
-      ansible.builtin.shell: |
-        source $HOME/.cargo/env
-        cargo install fd-find
-      args:
-        executable: /bin/bash
-      when: "'fd-find' not in cargo_installed.stdout"
-
-    - name: Install eza via cargo
-      ansible.builtin.shell: |
-        source $HOME/.cargo/env
-        cargo install eza
-      args:
-        executable: /bin/bash
-      when: "'eza' not in cargo_installed.stdout"
-
-    - name: Install starship via cargo
-      ansible.builtin.shell: |
-        source $HOME/.cargo/env
-        cargo install starship
-      args:
-        executable: /bin/bash
-      when: "'starship' not in cargo_installed.stdout"
-
-    - name: Install zoxide via cargo
-      ansible.builtin.shell: |
-        source $HOME/.cargo/env
-        cargo install zoxide
-      args:
-        executable: /bin/bash
-      when: "'zoxide' not in cargo_installed.stdout"
-
-    # Docker installation
-    - name: Check if docker binary exists
+    # Docker Installation
+    - name: Check if Docker exists
       ansible.builtin.stat:
         path: /usr/bin/docker
       register: docker_exists
 
-    - name: Download Docker installation script
-      when: not docker_exists.stat.exists
-      ansible.builtin.get_url:
-        url: https://get.docker.com
-        dest: /tmp/get-docker.sh
-        mode: "0755"
-
     - name: Install Docker
       when: not docker_exists.stat.exists
       become: true
-      ansible.builtin.shell: /tmp/get-docker.sh
-      args:
-        creates: /usr/bin/docker
+      block:
+        - name: Download Docker installation script
+          ansible.builtin.get_url:
+            url: https://get.docker.com
+            dest: /tmp/get-docker.sh
+            mode: "0755"
+
+        - name: Run Docker installation script
+          ansible.builtin.shell: /tmp/get-docker.sh
+          args:
+            creates: /usr/bin/docker
 
     - name: Add user to docker group
       become: true
@@ -175,55 +159,39 @@
       ansible.builtin.meta: reset_connection
 
     # Neovim Installation
-    - name: Check if Neovim is already installed
+    - name: Check if Neovim exists
       ansible.builtin.stat:
         path: /opt/nvim-linux-x86_64
       register: nvim_dir
 
-    - name: Get and install latest Neovim
+    - name: Install latest Neovim
       when: not nvim_dir.stat.exists
       become: true
       block:
-        - name: Get latest Neovim release from GitHub API
+        - name: Get latest Neovim release
           ansible.builtin.uri:
             url: https://api.github.com/repos/neovim/neovim/releases/latest
-            return_content: yes
+            return_content: true
           register: nvim_release
 
         - name: Download and extract latest Neovim
           ansible.builtin.unarchive:
             src: "https://github.com/neovim/neovim/releases/download/{{ nvim_release.json.tag_name }}/nvim-linux-x86_64.tar.gz"
             dest: /opt
-            remote_src: yes
+            remote_src: true
 
-    # Go CLI tools installation
-    - name: Check if lazygit is installed
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/go/bin/lazygit"
-      register: lazygit_bin
-
-    - name: Install lazygit
-      when: not lazygit_bin.stat.exists
+    # Go packages
+    - name: Install Go packages
       ansible.builtin.shell: |
         export PATH=$PATH:/usr/local/go/bin
-        go install github.com/jesseduffield/lazygit@latest
+        go install {{ item }}
       environment:
         GOPATH: "{{ ansible_user_dir }}/go"
+      loop: "{{ go_packages }}"
+      register: go_install
+      changed_when: "'downloading' in go_install.stderr"
 
-    - name: Check if lazydocker is installed
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/go/bin/lazydocker"
-      register: lazydocker_bin
-
-    - name: Install lazydocker
-      when: not lazydocker_bin.stat.exists
-      ansible.builtin.shell: |
-        export PATH=$PATH:/usr/local/go/bin
-        go install github.com/jesseduffield/lazydocker@latest
-      environment:
-        GOPATH: "{{ ansible_user_dir }}/go"
-
-    # Detect if we're running via ansible-pull (dotfiles already cloned)
+    # Dotfiles management
     - name: Check if running inside dotfiles repository
       ansible.builtin.stat:
         path: "{{ playbook_dir }}/.git"
@@ -234,161 +202,73 @@
         dotfiles_dir: "{{ playbook_dir }}"
       when: playbook_is_repo.stat.exists
 
-    # Clone dotfiles repository (only if NOT running via ansible-pull)
-    - name: Check if dotfiles directory exists
-      ansible.builtin.stat:
-        path: "{{ dotfiles_dir }}"
-      register: dotfiles_check
+    - name: Manage dotfiles repository
       when: not playbook_is_repo.stat.exists
-
-    - name: Clone dotfiles repository
-      when: not playbook_is_repo.stat.exists and not dotfiles_check.stat.exists
       ansible.builtin.git:
         repo: "{{ dotfiles_repo }}"
         dest: "{{ dotfiles_dir }}"
         version: main
-        update: yes
-        recursive: no
+        update: true
 
-    - name: Check if git submodules are initialized
-      ansible.builtin.stat:
-        path: "{{ dotfiles_dir }}/.git/modules"
-      register: submodules_check
-
-    - name: Initialize git submodules (zsh plugins, tmux TPM, LazyVim)
-      when: not submodules_check.stat.exists
+    - name: Update dotfiles when running via ansible-pull
+      when: playbook_is_repo.stat.exists
       ansible.builtin.command:
-        cmd: git submodule update --init --recursive
+        cmd: git pull --rebase origin main
         chdir: "{{ dotfiles_dir }}"
+      register: git_pull_result
+      changed_when: "'Already up to date' not in git_pull_result.stdout"
+      failed_when: git_pull_result.rc != 0 and 'Already up to date' not in git_pull_result.stdout
 
-    # Remove existing config files (will be replaced by stow symlinks)
-    - name: Check if .bashrc exists and is not a symlink
+    - name: Initialize and update git submodules
+      ansible.builtin.command:
+        cmd: git submodule update --init --remote --merge
+        chdir: "{{ dotfiles_dir }}"
+      register: submodule_result
+      changed_when: submodule_result.rc == 0
+
+    # Remove existing config files
+    - name: Check existing config files
       ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.bashrc"
-      register: bashrc_check
+        path: "{{ ansible_user_dir }}/{{ item.path }}"
+      loop: "{{ config_files }}"
+      register: config_stat
 
-    - name: Remove existing .bashrc if not a symlink
-      when: bashrc_check.stat.exists and not bashrc_check.stat.islnk
+    - name: Remove existing config files if not symlinks
       ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.bashrc"
+        path: "{{ item.item.path }}"
         state: absent
-
-    - name: Check if .zshrc exists and is not a symlink
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.zshrc"
-      register: zshrc_check
-
-    - name: Remove existing .zshrc if not a symlink
-      when: zshrc_check.stat.exists and not zshrc_check.stat.islnk
-      ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.zshrc"
-        state: absent
-
-    - name: Check if .tmux.conf exists and is not a symlink
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.tmux.conf"
-      register: tmuxconf_check
-
-    - name: Remove existing .tmux.conf if not a symlink
-      when: tmuxconf_check.stat.exists and not tmuxconf_check.stat.islnk
-      ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.tmux.conf"
-        state: absent
-
-    - name: Check if .config/nvim exists and is not a symlink
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.config/nvim"
-      register: nvim_config_check
-
-    - name: Remove existing nvim config if not a symlink
-      when: nvim_config_check.stat.exists and not nvim_config_check.stat.islnk
-      ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.config/nvim"
-        state: absent
-
-    - name: Check if .config/starship.toml exists and is not a symlink
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.config/starship.toml"
-      register: starship_config_check
-
-    - name: Remove existing starship config if not a symlink
-      when: starship_config_check.stat.exists and not starship_config_check.stat.islnk
-      ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.config/starship.toml"
-        state: absent
+      loop: "{{ config_stat.results }}"
+      when:
+        - item.stat.exists
+        - not item.stat.islnk
 
     # Stow dotfiles
-    - name: Stow bash configuration
+    - name: Stow dotfiles
       ansible.builtin.command:
-        cmd: stow -t {{ ansible_user_dir }} bash
+        cmd: stow -t {{ ansible_user_dir }} {{ item }}
         chdir: "{{ dotfiles_dir }}"
-      register: stow_bash
-      changed_when: stow_bash.rc == 0
-      failed_when: stow_bash.rc != 0
+      loop: "{{ stow_packages }}"
+      register: stow_result
+      changed_when: stow_result.rc == 0
+      failed_when: stow_result.rc != 0
 
-    - name: Stow zsh configuration
-      ansible.builtin.command:
-        cmd: stow -t {{ ansible_user_dir }} zsh
-        chdir: "{{ dotfiles_dir }}"
-      register: stow_zsh
-      changed_when: stow_zsh.rc == 0
-      failed_when: stow_zsh.rc != 0
-
-    - name: Stow nvim configuration
-      ansible.builtin.command:
-        cmd: stow -t {{ ansible_user_dir }} nvim
-        chdir: "{{ dotfiles_dir }}"
-      register: stow_nvim
-      changed_when: stow_nvim.rc == 0
-      failed_when: stow_nvim.rc != 0
-
-    - name: Stow tmux configuration
-      ansible.builtin.command:
-        cmd: stow -t {{ ansible_user_dir }} tmux
-        chdir: "{{ dotfiles_dir }}"
-      register: stow_tmux
-      changed_when: stow_tmux.rc == 0
-      failed_when: stow_tmux.rc != 0
-
-    - name: Stow starship configuration
-      ansible.builtin.command:
-        cmd: stow -t {{ ansible_user_dir }} starship
-        chdir: "{{ dotfiles_dir }}"
-      register: stow_starship
-      changed_when: stow_starship.rc == 0
-      failed_when: stow_starship.rc != 0
-
-    # Install tmux plugins via TPM
-    - name: Check if TPM exists after stowing
-      ansible.builtin.stat:
-        path: "{{ ansible_user_dir }}/.tmux/plugins/tpm/bin/install_plugins"
-      register: tpm_check
-
-    - name: Install tmux plugins
-      when: tpm_check.stat.exists
-      ansible.builtin.shell: |
-        {{ ansible_user_dir }}/.tmux/plugins/tpm/bin/install_plugins
+    # Install tmux plugins
+    - name: Install tmux plugins via TPM
+      ansible.builtin.shell: "{{ ansible_user_dir }}/.tmux/plugins/tpm/bin/install_plugins"
       register: tpm_install
       changed_when: "'Already installed' not in tpm_install.stdout"
+      failed_when: false
 
-    # Set zsh as default shell
-    - name: Get current user shell
-      ansible.builtin.command: getent passwd {{ ansible_user_id }}
-      register: user_shell
-      changed_when: false
-
+    # Set default shell
     - name: Change default shell to zsh
       become: true
       ansible.builtin.user:
         name: "{{ ansible_user_id }}"
         shell: /usr/bin/zsh
-      when: "'/usr/bin/zsh' not in user_shell.stdout"
 
     # Final system update
-    - name: Update all packages
+    - name: Upgrade all packages
       become: true
       ansible.builtin.apt:
         upgrade: dist
-        update_cache: yes
-      register: apt_upgrade
-      changed_when: apt_upgrade.changed
+        update_cache: true

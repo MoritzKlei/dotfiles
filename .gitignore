@@ -1,6 +1,11 @@
 tmux/.tmux/plugins/*
 !tmux/.tmux/plugins/tpm
 
+# Local configurations (machine-specific)
+**/.bashrc.local
+**/.zshrc.local
+**/.gitconfig.local
+
 # Ansible inventory files (keep local only)
 inventory
 inventory.ini

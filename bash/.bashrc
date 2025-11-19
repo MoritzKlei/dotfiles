@@ -1,146 +1,97 @@
-# ~/.bashrc: executed by bash(1) for non-login shells.
-# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
-# for examples
+# ============================================================================
+# Bash Configuration
+# ============================================================================
 
 # If not running interactively, don't do anything
 case $- in
-*i*) ;;
-*) return ;;
+  *i*) ;;
+  *) return ;;
 esac
 
-# don't put duplicate lines or lines starting with space in the history.
-# See bash(1) for more options
-HISTCONTROL=ignoreboth
+# -------- History Configuration --------
+HISTCONTROL=ignoreboth                        # Ignore duplicates and lines starting with space
+HISTSIZE=10000                                # Increased from 1000 for consistency with zsh
+HISTFILESIZE=20000                            # Increased from 2000
+shopt -s histappend                           # Append to history file
 
-# append to the history file, don't overwrite it
-shopt -s histappend
+# -------- Shell Options --------
+shopt -s checkwinsize                         # Update LINES and COLUMNS after each command
+shopt -s globstar 2>/dev/null                 # Enable ** for recursive glob (bash 4.0+)
 
-# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-HISTSIZE=1000
-HISTFILESIZE=2000
+# -------- Path Configuration --------
+# Using a function to avoid duplicate path entries
+add_to_path() {
+  case ":$PATH:" in
+    *":$1:"*) ;;
+    *) export PATH="$PATH:$1" ;;
+  esac
+}
 
-# check the window size after each command and, if necessary,
-# update the values of LINES and COLUMNS.
-shopt -s checkwinsize
+add_to_path "/usr/local/go/bin"
+add_to_path "$HOME/go/bin"
+add_to_path "/opt/nvim-linux-x86_64/bin"
+add_to_path "/usr/local/include"
+add_to_path "/usr/local/lib/cmake"
+add_to_path "$HOME/.local/bin"
 
-# If set, the pattern "**" used in a pathname expansion context will
-# match all files and zero or more directories and subdirectories.
-#shopt -s globstar
+# -------- External Integrations --------
+# Rust/Cargo
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
-# make less more friendly for non-text input files, see lesspipe(1)
-#[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+# Starship prompt
+command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"
 
-# set variable identifying the chroot you work in (used in the prompt below)
-if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
-  debian_chroot=$(cat /etc/debian_chroot)
-fi
+# Zoxide (cd replacement)
+command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init --cmd cd bash)"
 
-# set a fancy prompt (non-color, unless we know we "want" color)
-case "$TERM" in
-xterm-color | *-256color) color_prompt=yes ;;
-esac
+# envman (if installed)
+[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
 
-# uncomment for a colored prompt, if the terminal has the capability; turned
-# off by default to not distract the user: the focus in a terminal window
-# should be on the output of commands, not on the prompt
-#force_color_prompt=yes
-
-if [ -n "$force_color_prompt" ]; then
-  if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
-    # We have color support; assume it's compliant with Ecma-48
-    # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
-    # a case would tend to support setf rather than setaf.)
-    color_prompt=yes
-  else
-    color_prompt=
-  fi
-fi
-
-if [ "$color_prompt" = yes ]; then
-  PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-else
-  PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
-fi
-unset color_prompt force_color_prompt
-
-# If this is an xterm set the title to user@host:dir
-case "$TERM" in
-xterm* | rxvt*)
-  PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-  ;;
-*) ;;
-esac
-
-# enable color support of ls and also add handy aliases
+# -------- Colors --------
+# Enable color support for ls and other tools
 if [ -x /usr/bin/dircolors ]; then
   test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
   alias ls='ls --color=auto'
-  #alias dir='dir --color=auto'
-  #alias vdir='vdir --color=auto'
-
-  #alias grep='grep --color=auto'
-  #alias fgrep='fgrep --color=auto'
-  #alias egrep='egrep --color=auto'
+  alias grep='grep --color=auto'
+  alias fgrep='fgrep --color=auto'
+  alias egrep='egrep --color=auto'
 fi
 
-# colored GCC warnings and errors
-#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
-
-# some more ls aliases
-#alias ll='ls -l'
-#alias la='ls -A'
-#alias l='ls -CF'
-
-# Alias definitions.
-# You may want to put all your additions into a separate file like
-# ~/.bash_aliases, instead of adding them here directly.
-# See /usr/share/doc/bash-doc/examples in the bash-doc package.
-
-if [ -f ~/.bash_aliases ]; then
-  . ~/.bash_aliases
-fi
-
-# enable programmable completion features (you don't need to enable
-# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
-# sources /etc/bash.bashrc).
+# -------- Completion --------
+# Enable programmable completion
 if ! shopt -oq posix; then
   if [ -f /usr/share/bash-completion/bash_completion ]; then
-    . /usr/share/bash-completion/bash_completion
+    source /usr/share/bash-completion/bash_completion
   elif [ -f /etc/bash_completion ]; then
-    . /etc/bash_completion
+    source /etc/bash_completion
   fi
 fi
-. "$HOME/.cargo/env"
-eval "$(starship init bash)"
-eval "$(zoxide init --cmd cd bash)"
-export PATH="$PATH:/usr/local/go/bin"
-export PATH="$PATH:~/go/bin"
-export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 
-# Created by `pipx` on 2025-04-09 12:41:48
-export PATH="$PATH:/home/mkl/.local/bin"
-export PATH="$PATH:/usr/local/include"
-export PATH="$PATH:/usr/local/lib/cmake"
+# -------- Aliases --------
+# Basic commands
+alias vim='nvim'
+alias c='clear'
+alias ll='ls -lh'
+alias la='ls -lAh'
 
-alias wingit="/mnt/c/IT/utils/PortableGit/bin/git.exe"
-alias gimme="sudo chown -R $USER:$USER"
-alias rmbuild="rm ./build -rf && mkdir build"
-
+# -------- Functions --------
+# Git authentication
 gitauth() {
-  eval $(ssh-agent) && ssh-add ~/.ssh/id_ed25519
-}
-gitsub() {
-  git clone $2 $1 && cd $1 && git submodule update --init --recursive
-}
-wingitsub() {
-  wingit clone $2 $1 && cd $1 && wingit submodule update --init --recursive && gimme . && gimme .git
-}
-cninja() {
-  cmake -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ $1
-}
-pwsh() {
-  pwsh.exe -wd "${1:-C:/Users/u4032606/}"
+  eval "$(ssh-agent)" && ssh-add "$HOME/.ssh/id_ed25519"
 }
 
-# Generated for envman. Do not edit.
-[ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
+# Clone repo with submodules
+gitsub() {
+  if [ $# -lt 2 ]; then
+    echo "Usage: gitsub <directory> <repo-url>"
+    return 1
+  fi
+  git clone "$2" "$1" && cd "$1" && git submodule update --init --recursive
+}
+
+# -------- Local Customizations --------
+# Source bash aliases if they exist
+[ -f "$HOME/.bash_aliases" ] && source "$HOME/.bash_aliases"
+
+# Source local customizations if they exist
+[ -f "$HOME/.bashrc.local" ] && source "$HOME/.bashrc.local"
